@@ -8,6 +8,7 @@
 // >>>>> Functions declarations
 void load_params(ros::NodeHandle& nh);
 void processLaserScan(const sensor_msgs::LaserScan::ConstPtr& scan);
+void exitMinimum();
 // <<<<< Functions declarations
 
 #ifndef DEG2RAD
@@ -28,17 +29,20 @@ std::string velocity = "velocity";
 std::string name_node = "robot_wandering_node";
 
 float repThresh = 1.5f; /// Over this distance the point become attractive
-float dangerThresh = 1.0; /// Under this distance points are wheighted 3 times
+float dangerThresh = 0.5; /// If there are more than @ref dangerPtsCount the robot stops and turn
 float maxVal = 5.0f; /// Max Value used to normalize distances
+int dangerPtsMax = 10;
 
 float maxFwSpeed = 1.0f; /// Max forward speed (m/sec)
 float maxRotSpeed = M_PI; /// Max rotation speed (rad/sec)
 // <<<<< Params
 
 // >>>>> Globals
-ros::NodeHandle* nhPtr;
-ros::Publisher* wrenchPubPtr;
+ros::NodeHandle* nhPtr=NULL;
+ros::Publisher* wrenchPubPtr=NULL;
+ros::Publisher* twistPubPtr=NULL;
 float normVal = 8.0f;
+float last_omega_valid=0.0f;
 
 bool firstScan=true;
 // <<<<< Globals
@@ -70,6 +74,7 @@ int main(int argc, char** argv)
     ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("nav_force", 10, false);
     wrenchPubPtr = &wrenchPub;
     ros::Publisher twistPub = nh.advertise<geometry_msgs::Twist>("/" + robot_name + "/" + command + "/" + velocity, 10);
+    twistPubPtr = &twistPub;
 
     ros::Rate r(30);
 
@@ -80,8 +85,7 @@ int main(int argc, char** argv)
     geometry_msgs::Twist vel;
 
     while(nh.ok())
-    {
-
+    {        
         if( navInfo.valid )
         {
             vel.linear.x = navInfo.forceMod*maxFwSpeed;
@@ -94,23 +98,42 @@ int main(int argc, char** argv)
 
             if( fabs(navInfo.forceAng > 0.5 ) )
                 vel.linear.x *= -1.0f;
+
+            last_omega_valid = vel.angular.z;
+
+            if( fabs( vel.linear.x) < 0.05f && fabs(vel.angular.z) < 0.05f )
+                exitMinimum();
+            else
+                twistPub.publish( vel );
         }
         else
         {
-            vel.linear.x = 0;
-            vel.linear.y = 0;
-            vel.linear.z = 0;
-
-            vel.angular.x = 0;
-            vel.angular.y = 0;
-            vel.angular.z = 0;
+            exitMinimum();
         }
 
-        twistPub.publish( vel );
+
 
         ros::spinOnce();
         r.sleep();
     }
+}
+
+void exitMinimum()
+{
+    geometry_msgs::Twist vel;
+
+    ROS_INFO_STREAM("Exiting from minimum...");
+    vel.linear.x = 0;
+    vel.linear.y = 0;
+    vel.linear.z = 0;
+
+    vel.angular.x = 0;
+    vel.angular.y = 0;
+    vel.angular.z = M_PI*SIGN(last_omega_valid);;
+
+    twistPubPtr->publish( vel );
+
+    ros::Duration(1.0).sleep();
 }
 
 void load_params(ros::NodeHandle& nh)
@@ -168,6 +191,8 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
         ROS_INFO_STREAM( "Force normalization value: " << normVal );
     }
 
+    int dangerPtsCount = 0;
+
     for( int i=0; i<scan->ranges.size(); i++)
     {
         angle += scan->angle_increment;
@@ -182,12 +207,11 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
         }
         else
         {
-            range = (range < dangerThresh)?3*range:range;
-
-            float ptForce = (range > repThresh)?range:-range;
-
+            float ptForce = (range > repThresh)?range:-3*range;
             ptForce /= maxVal; // normalization
-            //float ptForce = range;
+
+            if( range < dangerThresh )
+                dangerPtsCount++;
 
             float Fx = ptForce*cos(angle);
             float Fy = ptForce*sin(angle);
@@ -214,7 +238,10 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     navInfo.forceMod = sqrt(forceY*forceY+forceX*forceX)/normVal;
     navInfo.forceAng = -atan2( forceY, forceX )/(2*M_PI);
 
-    navInfo.valid = true;
+    if( dangerPtsCount<dangerPtsMax )
+        navInfo.valid = true;
+    else
+        navInfo.valid = false;
 
     geometry_msgs::WrenchStamped forceMsg;
     forceMsg.header.stamp = scan->header.stamp;
