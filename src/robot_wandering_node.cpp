@@ -28,10 +28,12 @@ std::string velocity = "velocity";
 
 std::string name_node = "robot_wandering_node";
 
-float repThresh = 1.5f; /// Over this distance the point become attractive
-float dangerThresh = 0.5; /// If there are more than @ref dangerPtsCount the robot stops and turn
+float repThresh = 1.0f; /// Over this distance the point become attractive
+float dangerThresh = 0.6; /// If there are more than @ref dangerPtsCount the robot stops and turn
 float maxVal = 5.0f; /// Max Value used to normalize distances
 int dangerPtsMax = 10;
+
+float secureWidth = 0.5f; /// Used to detect dangerous obstacles
 
 float maxFwSpeed = 1.0f; /// Max forward speed (m/sec)
 float maxRotSpeed = M_PI; /// Max rotation speed (rad/sec)
@@ -123,7 +125,7 @@ void exitMinimum()
     geometry_msgs::Twist vel;
 
     ROS_INFO_STREAM("Exiting from minimum...");
-    vel.linear.x = 0;
+    vel.linear.x = -0.15;
     vel.linear.y = 0;
     vel.linear.z = 0;
 
@@ -133,7 +135,7 @@ void exitMinimum()
 
     twistPubPtr->publish( vel );
 
-    ros::Duration(1.0).sleep();
+    //ros::Duration(1.0).sleep();
 }
 
 void load_params(ros::NodeHandle& nh)
@@ -202,19 +204,32 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
         if( isnan(range) )
         {
 
-            // TODO replave with "scan->range_max"?
+            // TODO replace with "scan->range_max"?
             range = 1.0f;
         }
         else
         {
-            float ptForce = (range > repThresh)?range:-3*range;
-            ptForce /= maxVal; // normalization
+            float ptForce = range;
 
-            if( range < dangerThresh )
-                dangerPtsCount++;
-
+            // >>>>> Projections
             float Fx = ptForce*cos(angle);
             float Fy = ptForce*sin(angle);
+            // <<<<< Projections
+
+            if( (Fx < dangerThresh) && (fabs(Fy) < secureWidth/2.0f) ) // Point in the danger rectangular Area in front of the robot
+            {
+                dangerPtsCount++;
+
+                //ROS_INFO_STREAM( "Fy: " << Fy << " Fx: " << Fx << " dangerPtsCount:" << dangerPtsCount );
+            }
+
+            ptForce = (range > repThresh)?range:-range; // Repulsion!
+            ptForce /= maxVal; // normalization
+
+            // >>>>> Reprojection with normalization
+            Fx = ptForce*cos(angle);
+            Fy = ptForce*sin(angle);
+            // <<<<< Reprojection with normalization
 
 #ifdef WRENCH_VIEW_DEBUG
             geometry_msgs::WrenchStamped forceMsg;
@@ -236,7 +251,7 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     }
 
     navInfo.forceMod = sqrt(forceY*forceY+forceX*forceX)/normVal;
-    navInfo.forceAng = -atan2( forceY, forceX )/(2*M_PI);
+    navInfo.forceAng = atan2( forceY, forceX )/(2*M_PI);
 
     if( dangerPtsCount<dangerPtsMax )
         navInfo.valid = true;
