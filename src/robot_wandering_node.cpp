@@ -12,12 +12,12 @@ void exitMinimum();
 // <<<<< Functions declarations
 
 #ifndef DEG2RAD
-    #define DEG2RAD 0.017453293f
-    #define RAD2DEG 57.295777937f
+#define DEG2RAD 0.017453293f
+#define RAD2DEG 57.295777937f
 #endif
 
 #ifndef SIGN
-    #define SIGN(X) (X)>=0?(1):(-1);
+#define SIGN(X) (((X)>=0)?1:-1);
 #endif
 
 // >>>>> Params
@@ -30,12 +30,12 @@ std::string name_node = "robot_wandering_node";
 
 float repThresh = 1.0f; /// Over this distance the point become attractive
 float dangerThresh = 0.6; /// If there are more than @ref dangerPtsCount the robot stops and turn
-float maxVal = 5.0f; /// Max Value used to normalize distances
-int dangerPtsMax = 10;
+float maxVal = 8.0f; /// Max Value used to normalize distances
+int dangerPtsMax = 5;
 
-float secureWidth = 0.5f; /// Used to detect dangerous obstacles
+float secureWidth = 0.45f; /// Used to detect dangerous obstacles
 
-float maxFwSpeed = 1.0f; /// Max forward speed (m/sec)
+float maxFwSpeed = 0.8f; /// Max forward speed (m/sec)
 float maxRotSpeed = M_PI; /// Max rotation speed (rad/sec)
 // <<<<< Params
 
@@ -45,6 +45,7 @@ ros::Publisher* wrenchPubPtr=NULL;
 ros::Publisher* twistPubPtr=NULL;
 float normVal = 8.0f;
 float last_omega_valid=0.0f;
+float last_forceRot_danger=0.0f;
 
 bool firstScan=true;
 // <<<<< Globals
@@ -52,9 +53,10 @@ bool firstScan=true;
 // >>>>> Nav
 typedef struct _nav
 {
-    float forceMod;
-    float forceAng;
+    float forceFw;
+    float forceRot;
     bool valid;
+    bool danger;
 } Nav;
 Nav navInfo;
 // <<<<< Nav
@@ -83,37 +85,38 @@ int main(int argc, char** argv)
     ROS_INFO("robot_wandering_node node starting...!");
 
     navInfo.valid = false;
+    navInfo.danger = false;
 
     geometry_msgs::Twist vel;
 
     while(nh.ok())
-    {        
+    {
         if( navInfo.valid )
         {
-            vel.linear.x = navInfo.forceMod*maxFwSpeed;
+            vel.linear.x = navInfo.forceFw*maxFwSpeed;
             vel.linear.y = 0;
             vel.linear.z = 0;
 
             vel.angular.x = 0;
             vel.angular.y = 0;
-            vel.angular.z = navInfo.forceAng*maxFwSpeed;
-
-            if( fabs(navInfo.forceAng > 0.5 ) )
-                vel.linear.x *= -1.0f;
+            vel.angular.z = navInfo.forceRot*maxFwSpeed;
 
             last_omega_valid = vel.angular.z;
 
-            if( fabs( vel.linear.x) < 0.05f && fabs(vel.angular.z) < 0.05f )
+            if( fabs( vel.linear.x) < 0.03f && fabs(vel.angular.z) < 3.0f*DEG2RAD )
+            {
+                ROS_INFO_STREAM( "V: " << vel.linear.x << "m/sec - Omega: " << vel.angular.z << " rad/sec" );
                 exitMinimum();
+            }
             else
                 twistPub.publish( vel );
+
+            navInfo.valid = false;
         }
-        else
+        /*else
         {
             exitMinimum();
-        }
-
-
+        }*/
 
         ros::spinOnce();
         r.sleep();
@@ -125,26 +128,26 @@ void exitMinimum()
     geometry_msgs::Twist vel;
 
     ROS_INFO_STREAM("Exiting from minimum...");
-    vel.linear.x = -0.15;
+    vel.linear.x = -0.05;
     vel.linear.y = 0;
     vel.linear.z = 0;
 
     vel.angular.x = 0;
     vel.angular.y = 0;
-    vel.angular.z = M_PI*SIGN(last_omega_valid);;
+    vel.angular.z = -(M_PI/4.0f)*SIGN(last_omega_valid);;
 
     twistPubPtr->publish( vel );
 
-    //ros::Duration(1.0).sleep();
+    ros::Duration(1.0).sleep();
 }
 
 void load_params(ros::NodeHandle& nh)
 {
     if (nh.hasParam(name_node + "/velocity"))
     {
-            nh.getParam(name_node + "/velocity", velocity);
+        nh.getParam(name_node + "/velocity", velocity);
     } else {
-            nh.setParam(name_node + "/velocity", velocity);
+        nh.setParam(name_node + "/velocity", velocity);
     }
 
     if (nh.hasParam("/info/robot_name"))
@@ -211,24 +214,30 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
         {
             float ptForce = range;
 
-            // >>>>> Projections
-            float Fx = ptForce*cos(angle);
-            float Fy = ptForce*sin(angle);
-            // <<<<< Projections
-
-            if( (Fx < dangerThresh) && (fabs(Fy) < secureWidth/2.0f) ) // Point in the danger rectangular Area in front of the robot
+            if( ptForce < repThresh)
             {
-                dangerPtsCount++;
+                // >>>>> Projections
+                float Fx = ptForce*cos(angle);
+                float Fy = ptForce*sin(angle);
+                // <<<<< Projections
 
-                //ROS_INFO_STREAM( "Fy: " << Fy << " Fx: " << Fx << " dangerPtsCount:" << dangerPtsCount );
+                if( (Fx < dangerThresh) && (fabs(Fy) < secureWidth/2.0f) ) // Point in the danger rectangular Area in front of the robot
+                {
+                    dangerPtsCount++;
+
+                    ptForce *= -2.0f; // Amplifield repulsion
+                    //ROS_INFO_STREAM( "Fy: " << Fy << " Fx: " << Fx << " dangerPtsCount:" << dangerPtsCount );
+                }
+//                else
+//                    ptForce *= -1; // Simple repulsion
             }
 
-            ptForce = (range > repThresh)?range:-range; // Repulsion!
-            ptForce /= maxVal; // normalization
+            //ptForce = (range > repThresh)?range:-range; // Repulsion!
+            float ptForceNorm = ptForce/maxVal; // normalization
 
             // >>>>> Reprojection with normalization
-            Fx = ptForce*cos(angle);
-            Fy = ptForce*sin(angle);
+            float Fx_n = ptForceNorm*cos(angle);
+            float Fy_n = ptForceNorm*sin(angle);
             // <<<<< Reprojection with normalization
 
 #ifdef WRENCH_VIEW_DEBUG
@@ -236,8 +245,8 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
             forceMsg.header.stamp = scan->header.stamp;
             forceMsg.header.frame_id = "base_link";
 
-            forceMsg.wrench.force.x = Fx;
-            forceMsg.wrench.force.y = Fy;
+            forceMsg.wrench.force.x = Fx_n;
+            forceMsg.wrench.force.y = Fy_n;
             forceMsg.wrench.force.z = 0;
 
             wrenchPubPtr->publish(forceMsg);
@@ -245,36 +254,60 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
             ros::Duration(0.01).sleep();
 #endif
 
-            forceX += Fx;
-            forceY += Fy;
+            forceX += Fx_n;
+            forceY += Fy_n;
         }
     }
-
-    navInfo.forceMod = sqrt(forceY*forceY+forceX*forceX)/normVal;
-    navInfo.forceAng = atan2( forceY, forceX )/(2*M_PI);
-
-    if( dangerPtsCount<dangerPtsMax )
-        navInfo.valid = true;
-    else
-        navInfo.valid = false;
 
     geometry_msgs::WrenchStamped forceMsg;
     forceMsg.header.stamp = scan->header.stamp;
     forceMsg.header.frame_id = "base_link";
 
-    forceMsg.wrench.force.x = forceX/normVal;
-    forceMsg.wrench.force.y = forceY/normVal;
+
+
+    if( dangerPtsCount >= dangerPtsMax ) // Danger... stop forwarding
+    {
+        navInfo.forceFw = 0.0f;
+        navInfo.forceRot = 1.0*SIGN(forceY);
+
+        if( !navInfo.danger )
+        {
+            navInfo.forceRot = 1.0*SIGN(forceY);
+            last_forceRot_danger = navInfo.forceRot;
+        }
+        else
+        {
+            navInfo.forceRot = last_forceRot_danger;
+        }
+
+        navInfo.danger = true;
+
+
+    }
+    else
+    {
+        navInfo.forceFw = forceX/normVal;
+        navInfo.forceRot = -forceY/normVal;
+        navInfo.danger = false;
+    }
+
+
+
+    navInfo.valid = true;
+
+    forceMsg.wrench.force.x = navInfo.forceFw;
+    forceMsg.wrench.force.y = navInfo.forceRot;
     forceMsg.wrench.force.z = 0;
 
     wrenchPubPtr->publish(forceMsg);
 
-    ROS_INFO_STREAM( "Force FW: " << navInfo.forceMod << " - Force ROT: " << navInfo.forceAng );
+    ROS_INFO_STREAM( "Force FW: " << navInfo.forceFw << " - Force ROT: " << navInfo.forceRot );
 
 #ifdef WRENCH_VIEW_DEBUG
     ros::Duration(0.01).sleep();
 #endif
 
-    ROS_DEBUG_STREAM( "Force: " << navInfo.forceMod << " - Ang: " << navInfo.forceAng*RAD2DEG );
+    ROS_DEBUG_STREAM( "Force: " << navInfo.forceFw << " - Ang: " << navInfo.forceRot*RAD2DEG );
 }
 
 
