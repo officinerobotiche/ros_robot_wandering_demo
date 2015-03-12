@@ -33,7 +33,7 @@ float dangerThresh = 0.6; /// If there are more than @ref dangerPtsCount the rob
 float maxVal = 8.0f; /// Max Value used to normalize distances
 int dangerPtsMax = 5;
 
-float secureWidth = 0.45f; /// Used to detect dangerous obstacles
+float secureWidth = 0.50f; /// Used to detect dangerous obstacles
 
 float maxFwSpeed = 0.8f; /// Max forward speed (m/sec)
 float maxRotSpeed = M_PI; /// Max rotation speed (rad/sec)
@@ -128,13 +128,25 @@ void exitMinimum()
     geometry_msgs::Twist vel;
 
     ROS_INFO_STREAM("Exiting from minimum...");
-    vel.linear.x = -0.05;
+    vel.linear.x = -0.1;
     vel.linear.y = 0;
     vel.linear.z = 0;
 
     vel.angular.x = 0;
     vel.angular.y = 0;
-    vel.angular.z = -(M_PI/4.0f)*SIGN(last_omega_valid);;
+    vel.angular.z = 0;
+
+    twistPubPtr->publish( vel );
+
+    ros::Duration(1.0).sleep();
+
+    vel.linear.x = 0;
+    vel.linear.y = 0;
+    vel.linear.z = 0;
+
+    vel.angular.x = 0;
+    vel.angular.y = 0;
+    vel.angular.z = -(M_PI/2.0f)*SIGN(last_omega_valid);
 
     twistPubPtr->publish( vel );
 
@@ -268,7 +280,7 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     if( dangerPtsCount >= dangerPtsMax ) // Danger... stop forwarding
     {
         navInfo.forceFw = 0.0f;
-        navInfo.forceRot = 1.0*SIGN(forceY);
+        navInfo.forceRot = 2.0*SIGN(forceY);
 
         if( !navInfo.danger )
         {
