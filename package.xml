@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-    <name>robot_wandering_demo_ros</name>
+    <name>ros_robot_wandering_demo</name>
     <version>0.0.1</version>
     <description>
 	A simple demo that uses 2D laser scan as sensor to wander avoiding obstacles
