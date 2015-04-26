@@ -21,16 +21,13 @@ void exitMinimum();
 #endif
 
 // >>>>> Params
-std::string robot_name = ""; /// Name of the robot as prefix
-
-std::string command = "command";
-std::string velocity = "velocity";
+std::string cmd_vel_string = "cmd_vel";
 
 std::string name_node = "robot_wandering_node";
 
 float repThresh = 1.0f; /// Over this distance the point become attractive
 float dangerThresh = 0.6; /// If there are more than @ref dangerPtsCount the robot stops and turn
-float maxVal = 8.0f; /// Max Value used to normalize distances
+float maxRange = 8.0f; /// Max Value used to normalize distances
 int dangerPtsMax = 5;
 
 float secureWidth = 0.50f; /// Used to detect dangerous obstacles
@@ -75,9 +72,9 @@ int main(int argc, char** argv)
     scanSub = nh.subscribe<sensor_msgs::LaserScan>("/scan",1,&processLaserScan); // TODO add namespace before message!
     // <<<<< Subscribers
 
-    ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("nav_force", 10, false);
+    ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("/nav_force", 10, false);
     wrenchPubPtr = &wrenchPub;
-    ros::Publisher twistPub = nh.advertise<geometry_msgs::Twist>("/" + robot_name + "/" + command + "/" + velocity, 10);
+    ros::Publisher twistPub = nh.advertise<geometry_msgs::Twist>("/" + cmd_vel_string, 10);
     twistPubPtr = &twistPub;
 
     ros::Rate r(30);
@@ -155,19 +152,68 @@ void exitMinimum()
 
 void load_params(ros::NodeHandle& nh)
 {
-    if (nh.hasParam(name_node + "/velocity"))
+    if (nh.hasParam(name_node + "/cmd_vel"))
     {
-        nh.getParam(name_node + "/velocity", velocity);
-    } else {
-        nh.setParam(name_node + "/velocity", velocity);
+            nh.getParam(name_node + "/cmd_vel", cmd_vel_string);
+    }
+    else
+    {
+            nh.setParam(name_node + "/cmd_vel", cmd_vel_string);
     }
 
-    if (nh.hasParam("/info/robot_name"))
+    /*if( nh.hasParam( name_node + "/repulsive_threshold") )
     {
-        nh.getParam("/info/robot_name", robot_name );
-    } else {
-        nh.setParam("/info/robot_name", robot_name);
+        nh.getParam(name_node + "/repulsive_threshold", repThresh );
     }
+    else
+    {
+        nh.setParam(name_node + "/repulsive_threshold", repThresh );
+    }
+
+    if( nh.hasParam( name_node + "/danger_threshold") )
+    {
+        nh.getParam(name_node + "/danger_threshold", dangerThresh );
+    }
+    else
+    {
+        nh.setParam(name_node + "/danger_threshold", dangerThresh );
+    }
+
+    if( nh.hasParam( name_node + "/max_range") )
+    {
+        nh.getParam(name_node + "/max_range", maxRange );
+    }
+    else
+    {
+        nh.setParam(name_node + "/max_range", maxRange );
+    }
+
+    if( nh.hasParam( name_node + "/secure_width") )
+    {
+        nh.getParam(name_node + "/secure_width", secureWidth );
+    }
+    else
+    {
+        nh.setParam(name_node + "/secure_width", secureWidth );
+    }
+
+    if( nh.hasParam( name_node + "/max_fw_speed") )
+    {
+        nh.getParam(name_node + "/max_fw_speed", maxFwSpeed );
+    }
+    else
+    {
+        nh.setParam(name_node + "/max_fw_speed", maxFwSpeed );
+    }
+
+    if( nh.hasParam( name_node + "/max_rot_speed") )
+    {
+        nh.getParam(name_node + "/max_rot_speed", maxRotSpeed );
+    }
+    else
+    {
+        nh.setParam(name_node + "/max_rot_speed", maxRotSpeed );
+    }*/
 }
 
 void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
@@ -203,7 +249,7 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
             forceY += Fy;
         }
 
-        normVal = sqrt(forceY*forceY+forceX*forceX);
+        normVal = sqrt(forceY*forceY+forceX*forceX); // Value to normalize the module of the forcce vector
 
         ROS_INFO_STREAM( "Force normalization value: " << normVal );
     }
@@ -212,9 +258,9 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
 
     for( int i=0; i<scan->ranges.size(); i++)
     {
-        angle += scan->angle_increment;
+        angle += scan->angle_increment; // Angle update
 
-        float range = scan->ranges[i];
+        float range = scan->ranges[i]; // Scan range
 
         if( isnan(range) )
         {
@@ -245,7 +291,7 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
             }
 
             //ptForce = (range > repThresh)?range:-range; // Repulsion!
-            float ptForceNorm = ptForce/maxVal; // normalization
+            float ptForceNorm = ptForce/maxRange; // normalization
 
             // >>>>> Reprojection with normalization
             float Fx_n = ptForceNorm*cos(angle);
