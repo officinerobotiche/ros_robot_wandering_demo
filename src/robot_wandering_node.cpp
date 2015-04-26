@@ -2,6 +2,7 @@
 #include <sensor_msgs/LaserScan.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <geometry_msgs/Twist.h>
+#include <csignal>
 
 //#define WRENCH_VIEW_DEBUG 0
 
@@ -45,6 +46,9 @@ float last_omega_valid=0.0f;
 float last_forceRot_danger=0.0f;
 
 bool firstScan=true;
+
+struct sigaction sigAct;
+bool stop = false;
 // <<<<< Globals
 
 // >>>>> Nav
@@ -58,10 +62,25 @@ typedef struct _nav
 Nav navInfo;
 // <<<<< Nav
 
+// >>>>> Ctrl+C handler
+/*! Ctrl+C handler
+ */
+static void sighandler(int signo)
+{
+    stop = true;
+}
+// <<<<< Ctrl+C handler
+
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, name_node);
     ros::NodeHandle nh;
+
+    // >>>>> Ctrl+C handling
+    memset( &sigAct, 0, sizeof(sigAct) );
+    sigAct.sa_handler = sighandler;
+    sigaction(SIGINT, &sigAct, 0);
+    // <<<<< Ctrl+C handling
 
     nhPtr = &nh;
 
@@ -72,9 +91,9 @@ int main(int argc, char** argv)
     scanSub = nh.subscribe<sensor_msgs::LaserScan>("/scan",1,&processLaserScan); // TODO add namespace before message!
     // <<<<< Subscribers
 
-    ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("/nav_force", 10, false);
+    ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("nav_force", 10, false);
     wrenchPubPtr = &wrenchPub;
-    ros::Publisher twistPub = nh.advertise<geometry_msgs::Twist>("/" + cmd_vel_string, 10);
+    ros::Publisher twistPub = nh.advertise<geometry_msgs::Twist>( cmd_vel_string, 10);
     twistPubPtr = &twistPub;
 
     ros::Rate r(30);
@@ -86,8 +105,27 @@ int main(int argc, char** argv)
 
     geometry_msgs::Twist vel;
 
+    stop = false;
+
     while(nh.ok())
     {
+        if(stop)
+        {
+            ROS_INFO("... robot_wandering_node node stopping!");
+
+            vel.linear.x = 0;
+            vel.linear.y = 0;
+            vel.linear.z = 0;
+
+            vel.angular.x = 0;
+            vel.angular.y = 0;
+            vel.angular.z = 0;
+
+            twistPub.publish( vel );
+
+            break;
+        }
+
         if( navInfo.valid )
         {
             vel.linear.x = navInfo.forceFw*maxFwSpeed;
@@ -118,6 +156,8 @@ int main(int argc, char** argv)
         ros::spinOnce();
         r.sleep();
     }
+
+    exit( EXIT_SUCCESS );
 }
 
 void exitMinimum()
