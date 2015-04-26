@@ -26,15 +26,17 @@ std::string cmd_vel_string = "cmd_vel";
 
 std::string name_node = "robot_wandering_node";
 
-float repThresh = 1.0f; /// Over this distance the point become attractive
+float repThresh = 1.5f; /// Over this distance the point become attractive
 float dangerThresh = 0.6; /// If there are more than @ref dangerPtsCount the robot stops and turn
-float maxRange = 8.0f; /// Max Value used to normalize distances
+
+float maxVal = 8.0f; /// Max Value used to normalize distances
+
 int dangerPtsMax = 5;
 
-float secureWidth = 0.50f; /// Used to detect dangerous obstacles
+float secureWidth = 0.70f; /// Used to detect dangerous obstacles
 
 float maxFwSpeed = 0.8f; /// Max forward speed (m/sec)
-float maxRotSpeed = M_PI; /// Max rotation speed (rad/sec)
+float maxRotSpeed = 3*M_PI; /// Max rotation speed (rad/sec)
 // <<<<< Params
 
 // >>>>> Globals
@@ -183,7 +185,7 @@ void exitMinimum()
 
     vel.angular.x = 0;
     vel.angular.y = 0;
-    vel.angular.z = -(M_PI/2.0f)*SIGN(last_omega_valid);
+    vel.angular.z = (M_PI/2.0f)*SIGN(last_omega_valid);
 
     twistPubPtr->publish( vel );
 
@@ -276,7 +278,7 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     {
         firstScan=false;
 
-        float forceX, forceY;
+        float forceX=0.0f, forceY=0.0f;
 
         for( int i=0; i<scan->ranges.size(); i++ )
         {
@@ -295,21 +297,27 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     }
 
     int dangerPtsCount = 0;
+    int validCount = 0;
 
     for( int i=0; i<scan->ranges.size(); i++)
     {
         angle += scan->angle_increment; // Angle update
 
-        float range = scan->ranges[i]; // Scan range
+        float range = scan->ranges[i];
 
         if( isnan(range) )
         {
-
             // TODO replace with "scan->range_max"?
-            range = 1.0f;
+            //range = 1.0f;
+	    continue;
         }
         else
         {
+	    if( range > maxVal )
+		range = maxVal;
+
+            validCount++;
+
             float ptForce = range;
 
             if( ptForce < repThresh)
@@ -326,12 +334,12 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
                     ptForce *= -2.0f; // Amplifield repulsion
                     //ROS_INFO_STREAM( "Fy: " << Fy << " Fx: " << Fx << " dangerPtsCount:" << dangerPtsCount );
                 }
-//                else
-//                    ptForce *= -1; // Simple repulsion
+                else
+                    ptForce *= -1; // Simple repulsion
             }
 
             //ptForce = (range > repThresh)?range:-range; // Repulsion!
-            float ptForceNorm = ptForce/maxRange; // normalization
+            float ptForceNorm = ptForce/maxVal; // normalization
 
             // >>>>> Reprojection with normalization
             float Fx_n = ptForceNorm*cos(angle);
@@ -363,14 +371,14 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
 
 
 
-    if( dangerPtsCount >= dangerPtsMax ) // Danger... stop forwarding
+    if( dangerPtsCount >= dangerPtsMax || validCount<20) // Danger... stop forwarding
     {
         navInfo.forceFw = 0.0f;
-        navInfo.forceRot = 2.0*SIGN(forceY);
+        //navInfo.forceRot = -2.0*SIGN(forceY);
 
         if( !navInfo.danger )
         {
-            navInfo.forceRot = 1.0*SIGN(forceY);
+            navInfo.forceRot = 2.0*SIGN(forceY);
             last_forceRot_danger = navInfo.forceRot;
         }
         else
@@ -384,8 +392,8 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     }
     else
     {
-        navInfo.forceFw = forceX/normVal;
-        navInfo.forceRot = -forceY/normVal;
+        navInfo.forceFw = forceX/(float)validCount;
+        navInfo.forceRot = forceY/(float)validCount;
         navInfo.danger = false;
     }
 
