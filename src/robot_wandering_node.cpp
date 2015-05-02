@@ -90,7 +90,7 @@ int main(int argc, char** argv)
 
     // >>>>> Subscribers
     ros::Subscriber scanSub;
-    scanSub = nh.subscribe<sensor_msgs::LaserScan>("/scan",1,&processLaserScan); // TODO add namespace before message!
+    scanSub = nh.subscribe<sensor_msgs::LaserScan>("scan",1,&processLaserScan); // TODO add namespace before message!
     // <<<<< Subscribers
 
     ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("nav_force", 10, false);
