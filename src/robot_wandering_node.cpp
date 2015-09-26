@@ -22,30 +22,24 @@ void exitMinimum();
 #endif
 
 // >>>>> Params
-std::string cmd_vel_string = "cmd_vel";
-
-std::string name_node = "robot_wandering_node";
-
-float repThresh = 1.5f; /// Over this distance the point become attractive
-float dangerThresh = 0.6; /// If there are more than @ref dangerPtsCount the robot stops and turn
-
-float maxVal = 8.0f; /// Max Value used to normalize distances
-
-int dangerPtsMax = 5;
-
-float secureWidth = 0.70f; /// Used to detect dangerous obstacles
-
-float maxFwSpeed = 0.8f; /// Max forward speed (m/sec)
-float maxRotSpeed = 3*M_PI; /// Max rotation speed (rad/sec)
+std::string cmd_vel_string = "cmd_vel"; ///< Speed command to publish (Topic: geometry_msgs::Twist)
+double repThresh = 1.5f;                 ///< Over this distance the point become attractive
+double dangerThresh = 0.6;               ///< Points nearest than this distance are really dangerous and repulsion is doubled
+double maxLaserVal = 8.0f;               ///< Max Laser distance
+int dangerPtsMax = 5;                   ///< If there are more than @ref dangerPtsMax the robot stops and turn
+double secureWidth = 0.70f;              ///< Width used to detect dangerous obstacles
+double maxFwSpeed = 0.8f;                ///< Max forward speed (m/sec)
+double maxRotSpeed = 3*M_PI;             ///< Max rotation speed (rad/sec)
 // <<<<< Params
 
 // >>>>> Globals
+std::string name_node = "robot_wandering_node";
 ros::NodeHandle* nhPtr=NULL;
 ros::Publisher* wrenchPubPtr=NULL;
 ros::Publisher* twistPubPtr=NULL;
-float normVal = 8.0f;
-float last_omega_valid=0.0f;
-float last_forceRot_danger=0.0f;
+double normVal = 8.0f;
+double last_omega_valid=0.0f;
+double last_forceRot_danger=0.0f;
 
 bool firstScan=true;
 
@@ -56,8 +50,8 @@ bool stop = false;
 // >>>>> Nav
 typedef struct _nav
 {
-    float forceFw;
-    float forceRot;
+    double forceFw;
+    double forceRot;
     bool valid;
     bool danger;
 } Nav;
@@ -77,6 +71,7 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, name_node);
     ros::NodeHandle nh;
+    ros::NodeHandle nhPriv("~"); // Private node handler to retrieve parameters
 
     // >>>>> Ctrl+C handling
     memset( &sigAct, 0, sizeof(sigAct) );
@@ -86,7 +81,7 @@ int main(int argc, char** argv)
 
     nhPtr = &nh;
 
-    load_params( nh );
+    load_params( nhPriv );
 
     // >>>>> Subscribers
     ros::Subscriber scanSub;
@@ -194,68 +189,75 @@ void exitMinimum()
 
 void load_params(ros::NodeHandle& nh)
 {
-    if (nh.hasParam(name_node + "/cmd_vel"))
+    if( nh.hasParam( "cmd_vel_string" ) )
     {
-            nh.getParam(name_node + "/cmd_vel", cmd_vel_string);
+        nh.getParam( "cmd_vel_string", cmd_vel_string );
     }
     else
     {
-            nh.setParam(name_node + "/cmd_vel", cmd_vel_string);
+        nh.setParam( "cmd_vel_string", cmd_vel_string );
+        ROS_INFO_STREAM( "cmd_vel_string" << " not present. Default value set: " << cmd_vel_string );
     }
 
-    /*if( nh.hasParam( name_node + "/repulsive_threshold") )
+    if( nh.hasParam( "dangerThresh" ) )
     {
-        nh.getParam(name_node + "/repulsive_threshold", repThresh );
+        nh.getParam( "dangerThresh", dangerThresh );
     }
     else
     {
-        nh.setParam(name_node + "/repulsive_threshold", repThresh );
+        nh.setParam( "dangerThresh", dangerThresh );
+        ROS_INFO_STREAM( "dangerThresh" << " not present. Default value set: " << dangerThresh );
     }
 
-    if( nh.hasParam( name_node + "/danger_threshold") )
+    if( nh.hasParam( "maxLaserVal" ) )
     {
-        nh.getParam(name_node + "/danger_threshold", dangerThresh );
+        nh.getParam( "maxLaserVal", maxLaserVal );
     }
     else
     {
-        nh.setParam(name_node + "/danger_threshold", dangerThresh );
+        nh.setParam( "maxLaserVal", maxLaserVal );
+        ROS_INFO_STREAM( "maxLaserVal" << " not present. Default value set: " << maxLaserVal );
     }
 
-    if( nh.hasParam( name_node + "/max_range") )
+    if( nh.hasParam( "dangerPtsMax" ) )
     {
-        nh.getParam(name_node + "/max_range", maxRange );
+        nh.getParam( "dangerPtsMax", dangerPtsMax );
     }
     else
     {
-        nh.setParam(name_node + "/max_range", maxRange );
+        nh.setParam( "dangerPtsMax", dangerPtsMax );
+        ROS_INFO_STREAM( "dangerPtsMax" << " not present. Default value set: " << dangerPtsMax );
     }
 
-    if( nh.hasParam( name_node + "/secure_width") )
+    if( nh.hasParam( "secureWidth" ) )
     {
-        nh.getParam(name_node + "/secure_width", secureWidth );
+        nh.getParam( "secureWidth", secureWidth );
     }
     else
     {
-        nh.setParam(name_node + "/secure_width", secureWidth );
+        nh.setParam( "secureWidth", secureWidth );
+        ROS_INFO_STREAM( "secureWidth" << " not present. Default value set: " << secureWidth );
     }
 
-    if( nh.hasParam( name_node + "/max_fw_speed") )
+    if( nh.hasParam( "maxFwSpeed" ) )
     {
-        nh.getParam(name_node + "/max_fw_speed", maxFwSpeed );
+        nh.getParam( "maxFwSpeed", maxFwSpeed );
     }
     else
     {
-        nh.setParam(name_node + "/max_fw_speed", maxFwSpeed );
+        nh.setParam( "maxFwSpeed", maxFwSpeed );
+        ROS_INFO_STREAM( "maxFwSpeed" << " not present. Default value set: " << maxFwSpeed );
     }
 
-    if( nh.hasParam( name_node + "/max_rot_speed") )
+    if( nh.hasParam( "maxRotSpeed" ) )
     {
-        nh.getParam(name_node + "/max_rot_speed", maxRotSpeed );
+        nh.getParam( "maxRotSpeed", maxRotSpeed );
     }
     else
     {
-        nh.setParam(name_node + "/max_rot_speed", maxRotSpeed );
-    }*/
+        nh.setParam( "maxRotSpeed", maxRotSpeed );
+        ROS_INFO_STREAM( "maxRotSpeed" << " not present. Default value set: " << maxRotSpeed );
+    }
 }
 
 void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
@@ -269,23 +271,23 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
      * 90° +Y  <------------|-----------> Y -90°
      */
 
-    float angle = scan->angle_min;
+    double angle = scan->angle_min;
 
-    float forceX = 0.0f;
-    float forceY = 0.0f;
+    double forceX = 0.0f;
+    double forceY = 0.0f;
 
     if( firstScan )
     {
         firstScan=false;
 
-        float forceX=0.0f, forceY=0.0f;
+        double forceX=0.0f, forceY=0.0f;
 
         for( int i=0; i<scan->ranges.size(); i++ )
         {
-            float range = 1.0; // Max normalized value
+            double range = 1.0; // Max normalized value
 
-            float Fx = range*cos(angle);
-            float Fy = range*sin(angle);
+            double Fx = range*cos(angle);
+            double Fy = range*sin(angle);
 
             forceX += Fx;
             forceY += Fy;
@@ -303,28 +305,28 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     {
         angle += scan->angle_increment; // Angle update
 
-        float range = scan->ranges[i];
+        double range = scan->ranges[i];
 
         if( isnan(range) )
         {
             // TODO replace with "scan->range_max"?
             //range = 1.0f;
-	    continue;
+            continue;
         }
         else
         {
-	    if( range > maxVal )
-		range = maxVal;
+            if( range > maxLaserVal )
+                range = maxLaserVal;
 
             validCount++;
 
-            float ptForce = range;
+            double ptForce = range;
 
             if( ptForce < repThresh)
             {
                 // >>>>> Projections
-                float Fx = ptForce*cos(angle);
-                float Fy = ptForce*sin(angle);
+                double Fx = ptForce*cos(angle);
+                double Fy = ptForce*sin(angle);
                 // <<<<< Projections
 
                 if( (Fx < dangerThresh) && (fabs(Fy) < secureWidth/2.0f) ) // Point in the danger rectangular Area in front of the robot
@@ -339,11 +341,11 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
             }
 
             //ptForce = (range > repThresh)?range:-range; // Repulsion!
-            float ptForceNorm = ptForce/maxVal; // normalization
+            double ptForceNorm = ptForce/maxLaserVal; // normalization
 
             // >>>>> Reprojection with normalization
-            float Fx_n = ptForceNorm*cos(angle);
-            float Fy_n = ptForceNorm*sin(angle);
+            double Fx_n = ptForceNorm*cos(angle);
+            double Fy_n = ptForceNorm*sin(angle);
             // <<<<< Reprojection with normalization
 
 #ifdef WRENCH_VIEW_DEBUG
@@ -369,8 +371,6 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     forceMsg.header.stamp = scan->header.stamp;
     forceMsg.header.frame_id = "base_link";
 
-
-
     if( dangerPtsCount >= dangerPtsMax || validCount<20) // Danger... stop forwarding
     {
         navInfo.forceFw = 0.0f;
@@ -392,8 +392,8 @@ void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)
     }
     else
     {
-        navInfo.forceFw = forceX/(float)validCount;
-        navInfo.forceRot = forceY/(float)validCount;
+        navInfo.forceFw = forceX/(double)validCount;
+        navInfo.forceRot = forceY/(double)validCount;
         navInfo.danger = false;
     }
 

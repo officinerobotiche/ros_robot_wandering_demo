@@ -1,0 +1,65 @@
+<launch>
+  <node pkg="ros_robot_wandering_demo" type="robot_wandering_node" name="robot_wandering_node" output="screen"> 
+     
+     <!-- Speed command to publish (Topic: geometry_msgs::Twist) -->
+     <param name="cmd_vel_string" value="cmd_vel"/>
+
+     <!-- Points nearest than this distance are really dangerous and repulsion force is doubled -->
+     <param name="dangerThresh" value="0.6"/>
+
+     <!-- If there are more than "dangerPtsMax" nearest than "dangerThresh" the robot stops and turn -->
+     <param name="dangerPtsMax" value="5"/>
+
+     <!-- Over this distance (meter) the point become attractive instead of repulsive -->
+     <param name="repThresh" value="1.5"/>     
+
+     <!-- Max Laser value (meter) -->
+     <param name="maxLaserVal" value="8"/>
+
+     <!-- Width of the obstacle zone (meter) -->
+     <param name="secureWidth" value="0.7"/>
+
+     <!-- Max forward speed (m/sec) -->
+     <param name="maxFwSpeed" value="0.8"/>
+
+     <!-- Max rotation speed (rad/sec) -->
+     <param name="maxRotSpeed" value="9.4"/>
+
+     <!-- 
+
+          |<<<<< secureWidth >>>>>|
+
+          |_______________________| <<<<< maxLaserVal
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |_______________________| <<<<< repThresh
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |                       |
+          |_______________________| <<<<< dangerThresh		
+          |                       |
+          |                       |
+          |                       |
+          |       _________       |
+		  |   R   |
+		  |   o   |
+		  |   b   |
+		  |   o   |
+		  |   t	  |
+                  |_______|
+    -->	
+   </node>   
+</launch>
+
