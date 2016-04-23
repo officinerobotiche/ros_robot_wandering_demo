@@ -4,12 +4,16 @@
 #include <geometry_msgs/Twist.h>
 #include <csignal>
 
+#include <dynamic_reconfigure/server.h>
+#include <ros_robot_wandering_demo/wandering_dyn_paramsConfig.h>
+
 //#define WRENCH_VIEW_DEBUG 0
 
 // >>>>> Functions declarations
 void load_params(ros::NodeHandle& nh);
 void processLaserScan(const sensor_msgs::LaserScan::ConstPtr& scan);
 void exitMinimum();
+void dynReconfCallback(ros_robot_wandering_demo::wandering_dyn_paramsConfig &config, uint32_t level);
 // <<<<< Functions declarations
 
 #ifndef DEG2RAD
@@ -23,13 +27,14 @@ void exitMinimum();
 
 // >>>>> Params
 std::string cmd_vel_string = "cmd_vel"; ///< Speed command to publish (Topic: geometry_msgs::Twist)
-double repThresh = 1.5f;                 ///< Over this distance the point become attractive
-double dangerThresh = 0.6;               ///< Points nearest than this distance are really dangerous and repulsion is doubled
-double maxLaserVal = 8.0f;               ///< Max Laser distance
+double repThresh = 1.5f;                ///< Over this distance the point become attractive
+double dangerThresh = 0.6;              ///< Points nearest than this distance are really dangerous and repulsion is doubled
+double maxLaserVal = 8.0f;              ///< Max Laser distance
 int dangerPtsMax = 5;                   ///< If there are more than @ref dangerPtsMax the robot stops and turn
-double secureWidth = 0.70f;              ///< Width used to detect dangerous obstacles
-double maxFwSpeed = 0.8f;                ///< Max forward speed (m/sec)
-double maxRotSpeed = 3*M_PI;             ///< Max rotation speed (rad/sec)
+double secureWidth = 0.70f;             ///< Width used to detect dangerous obstacles
+double maxFwSpeed = 0.8f;               ///< Max forward speed (m/sec)
+double maxRotSpeed = 3*M_PI;            ///< Max rotation speed (rad/sec)
+bool noInfoTurnAround = false;          ///< Indicates if the robot must stop and turn around when no laser info are available (obstacle too near)
 // <<<<< Params
 
 // >>>>> Globals
@@ -67,6 +72,8 @@ static void sighandler(int signo)
 }
 // <<<<< Ctrl+C handler
 
+
+
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, name_node);
@@ -78,6 +85,14 @@ int main(int argc, char** argv)
     sigAct.sa_handler = sighandler;
     sigaction(SIGINT, &sigAct, 0);
     // <<<<< Ctrl+C handling
+
+    // >>>>> Dynamic reconfigure
+    dynamic_reconfigure::Server<ros_robot_wandering_demo::wandering_dyn_paramsConfig> server;
+    dynamic_reconfigure::Server<ros_robot_wandering_demo::wandering_dyn_paramsConfig>::CallbackType f;
+
+    f = boost::bind(&dynReconfCallback, _1, _2);
+    server.setCallback(f);
+    // <<<<< Dynamic reconfigure
 
     nhPtr = &nh;
 
@@ -187,6 +202,33 @@ void exitMinimum()
     ros::Duration(1.0).sleep();
 }
 
+
+void dynReconfCallback(ros_robot_wandering_demo::wandering_dyn_paramsConfig &config, uint32_t level)
+{
+    repThresh = config.repThresh;
+    dangerThresh = config.dangerThresh;
+    maxLaserVal = config.maxLaserVal;
+    dangerPtsMax = config.dangerPtsMax;
+    secureWidth = config.secureWidth;
+    maxFwSpeed = config.maxFwSpeed;
+    maxRotSpeed = config.maxRotSpeed;
+    noInfoTurnAround = config.noInfoTurnAround;
+
+    if( config.restore_defaults )
+    {
+        config.repThresh = 1.5f;                // Over this distance the point become attractive
+        config.dangerThresh = 0.6;              // Points nearest than this distance are really dangerous and repulsion is doubled
+        config.maxLaserVal = 8.0f;              // Max Laser distance
+        config.dangerPtsMax = 5;                // If there are more than @ref dangerPtsMax the robot stops and turn
+        config.secureWidth = 0.70f;             // Width used to detect dangerous obstacles
+        config.maxFwSpeed = 0.8f;               // Max forward speed (m/sec)
+        config.maxRotSpeed = 3*M_PI;            // Max rotation speed (rad/sec)
+        config.noInfoTurnAround = false;        // Indicates if the robot must stop and turn around when no laser info are available (obstacle too near)
+
+        config.restore_defaults = false;
+    }
+}
+
 void load_params(ros::NodeHandle& nh)
 {
     if( nh.hasParam( "cmd_vel_string" ) )
@@ -258,6 +300,17 @@ void load_params(ros::NodeHandle& nh)
         nh.setParam( "maxRotSpeed", maxRotSpeed );
         ROS_INFO_STREAM( "maxRotSpeed" << " not present. Default value set: " << maxRotSpeed );
     }
+
+    if( nh.hasParam( "noInfoTurnAround" ) )
+    {
+        nh.getParam( "noInfoTurnAround", noInfoTurnAround );
+    }
+    else
+    {
+        nh.setParam( "noInfoTurnAround", noInfoTurnAround );
+        ROS_INFO_STREAM( "noInfoTurnAround" << " not present. Default value set: " << noInfoTurnAround );
+    }
+
 }
 
 void processLaserScan( const sensor_msgs::LaserScan::ConstPtr& scan)

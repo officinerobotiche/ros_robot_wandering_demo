@@ -25,6 +25,9 @@
      <!-- Max rotation speed (rad/sec) -->
      <param name="maxRotSpeed" value="9.4"/>
 
+     <!-- Indicates if the robot must stop and turn around when no laser info are available (obstacle too near) -->
+     <param name="noInfoTurnAround" value="False"/>
+
      <!-- 
 
           |<<<<< secureWidth >>>>>|
