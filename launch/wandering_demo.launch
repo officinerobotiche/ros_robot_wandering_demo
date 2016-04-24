@@ -4,11 +4,14 @@
      <!-- Speed command to publish (Topic: geometry_msgs::Twist) -->
      <param name="cmd_vel_string" value="cmd_vel"/>
 
+     <!-- Reference frame for rviz visualization (default: base_link)-->
+     <param name="frame_link" value="rgbd_camera_depth_frame"/>
+
      <!-- Points nearest than this distance are really dangerous and repulsion force is doubled -->
      <param name="dangerThresh" value="0.6"/>
 
-     <!-- If there are more than "dangerPtsMax" nearest than "dangerThresh" the robot stops and turn -->
-     <param name="dangerPtsMax" value="5"/>
+     <!-- If the 'dangerPtsPerc'% of the points is in dangerous zone, the robot stops and turns -->
+     <param name="dangerPtsPerc" value="10"/>
 
      <!-- Over this distance (meter) the point become attractive instead of repulsive -->
      <param name="repThresh" value="1.5"/>     
