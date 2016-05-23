@@ -9,6 +9,8 @@
 #include <dynamic_reconfigure/server.h>
 #include <ros_robot_wandering_demo/wandering_dyn_paramsConfig.h>
 
+#include <tf/tf.h>
+
 //#define WRENCH_VIEW_DEBUG 0
 
 // >>>>> Functions declarations
@@ -103,7 +105,7 @@ int main(int argc, char** argv)
 
     // >>>>> Subscribers
     ros::Subscriber scanSub;
-    scanSub = nh.subscribe<sensor_msgs::LaserScan>("scan",1,&processLaserScan);
+    scanSub = nh.subscribe<sensor_msgs::LaserScan>("zed_camera/scan",1,&processLaserScan);
     // <<<<< Subscribers
 
     ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("nav_force", 10, false);
@@ -115,7 +117,8 @@ int main(int argc, char** argv)
     ros::Publisher dangerZonePub = nh.advertise<visualization_msgs::Marker>("danger_zone", 1, false );
     ros::Publisher repLimitPub = nh.advertise<visualization_msgs::Marker>("repulsive_limit", 1, false );
     ros::Publisher laserLimitPub = nh.advertise<visualization_msgs::Marker>("laser_limit", 1, false );
-    ros::Publisher forceVectorPub = nh.advertise<visualization_msgs::Marker>("force_vector", 1, false );
+    ros::Publisher forceFwVectorPub = nh.advertise<visualization_msgs::Marker>("force_fw_vector", 1, false );
+    ros::Publisher forceRotVectorPub = nh.advertise<visualization_msgs::Marker>("force_rot_vector", 1, false );
 
     ros::Rate r(30);
 
@@ -216,7 +219,7 @@ int main(int argc, char** argv)
             marker.ns = "wandering";
             marker.id = 0;
             marker.type = visualization_msgs::Marker::CUBE;
-            marker.action = visualization_msgs::Marker::ADD;
+            marker.action = visualization_msgs::Marker::MODIFY;
             marker.pose.position.x = dangerThresh/2;
             marker.pose.position.y = 0.0;
             marker.pose.position.z = 0.0;
@@ -244,7 +247,7 @@ int main(int argc, char** argv)
             marker.ns = "wandering";
             marker.id = 1;
             marker.type = visualization_msgs::Marker::SPHERE;
-            marker.action = visualization_msgs::Marker::ADD;
+            marker.action = visualization_msgs::Marker::MODIFY;
             marker.pose.position.x = 0.0;
             marker.pose.position.y = 0.0;
             marker.pose.position.z = 0.0;
@@ -272,7 +275,7 @@ int main(int argc, char** argv)
             marker.ns = "wandering";
             marker.id = 2;
             marker.type = visualization_msgs::Marker::SPHERE;
-            marker.action = visualization_msgs::Marker::ADD;
+            marker.action = visualization_msgs::Marker::MODIFY;
             marker.pose.position.x = 0.0;
             marker.pose.position.y = 0.0;
             marker.pose.position.z = 0.0;
@@ -283,7 +286,7 @@ int main(int argc, char** argv)
             marker.scale.x = maxLaserVal*2;
             marker.scale.y = maxLaserVal*2;
             marker.scale.z = 0.001;
-            marker.color.a = 0.3;
+            marker.color.a = 0.1;
             marker.color.r = 0.7;
             marker.color.g = 0.7;
             marker.color.b = 0.3;
@@ -291,16 +294,17 @@ int main(int argc, char** argv)
             laserLimitPub.publish( marker );
         }
 
-        if( forceVectorPub.getNumSubscribers()>0 )
+        if( forceFwVectorPub.getNumSubscribers()>0 )
         {
             visualization_msgs::Marker marker;
 
             marker.header.frame_id = frame_link;
             marker.header.stamp = now;
             marker.ns = "wandering";
-            marker.id = 2;
+            marker.id = 3;
             marker.type = visualization_msgs::Marker::ARROW;
-            marker.action = visualization_msgs::Marker::ADD;
+            marker.action = visualization_msgs::Marker::MODIFY;
+
             marker.pose.position.x = 0.0;
             marker.pose.position.y = 0.0;
             marker.pose.position.z = 0.0;
@@ -312,11 +316,65 @@ int main(int argc, char** argv)
             marker.scale.y = 0.1;
             marker.scale.z = 0.1;
             marker.color.a = 1.0;
-            marker.color.r = 1.0;
-            marker.color.g = 0.7;
-            marker.color.b = 0.3;
 
-            forceVectorPub.publish( marker );
+            if(navInfo.danger)
+            {
+                marker.color.r = 0.7;
+                marker.color.g = 0.3;
+                marker.color.b = 0.3;
+            }
+            else
+            {
+                marker.color.r = 0.3;
+                marker.color.g = 0.7;
+                marker.color.b = 0.3;
+            }
+
+            forceFwVectorPub.publish( marker );
+        }
+
+        if( forceRotVectorPub.getNumSubscribers()>0 )
+        {
+            visualization_msgs::Marker marker;
+
+            marker.header.frame_id = frame_link;
+            marker.header.stamp = now;
+            marker.ns = "wandering";
+            marker.id = 4;
+            marker.type = visualization_msgs::Marker::ARROW;
+            marker.action = visualization_msgs::Marker::MODIFY;
+
+            marker.pose.position.x = 0.0;
+            marker.pose.position.y = 0.0;
+            marker.pose.position.z = 0.0;
+
+            tf::Quaternion quat;
+            //double ang = navInfo.forceRot<0?-90.0:90.0;
+            quat.setRPY(0,0,90.0*DEG2RAD);
+            marker.pose.orientation.x = quat.getX();
+            marker.pose.orientation.y = quat.getY();
+            marker.pose.orientation.z = quat.getZ();
+            marker.pose.orientation.w = quat.getW();
+
+            marker.scale.x = navInfo.forceRot*maxRotSpeed;
+            marker.scale.y = 0.1;
+            marker.scale.z = 0.1;
+            marker.color.a = 1.0;
+
+            if(navInfo.danger)
+            {
+                marker.color.r = 0.7;
+                marker.color.g = 0.3;
+                marker.color.b = 0.3;
+            }
+            else
+            {
+                marker.color.r = 0.3;
+                marker.color.g = 0.7;
+                marker.color.b = 0.3;
+            }
+
+            forceRotVectorPub.publish( marker );
         }
         // <<<<< Robot areas for Rviz
 
