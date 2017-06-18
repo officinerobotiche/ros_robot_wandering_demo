@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(ros_robot_wandering_demo)
 
+## Add support for C++11, supported in ROS Kinetic and newer
+# add_definitions(-std=c++11)
+
 #########################################################
 ## Options
 option( DEBUG_ACTIVE "Enable Debug build" ON )
@@ -16,61 +19,47 @@ else()
 endif()
 #########################################################
 
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  std_msgs
-  sensor_msgs
-  geometry_msgs
-  dynamic_reconfigure
+find_package(catkin REQUIRED 
+		COMPONENTS
+		  roscpp
+		  std_msgs
+		  sensor_msgs
+		  geometry_msgs
+		  dynamic_reconfigure
 )
 
-#########################################################
-# CFG FILES
-# Adding CFG files to project source, without compiling them
-file(GLOB_RECURSE CFG . *.cfg)
-set_source_files_properties(${CFG} PROPERTIES HEADER_FILE_ONLY TRUE)
+################################################
+## Declare ROS dynamic reconfigure parameters ##
+################################################
 
+# dynamic reconfigure
 generate_dynamic_reconfigure_options(
-    ${CFG}
+    cfg/wandering_dyn_params.cfg
 )
-#########################################################
 
-# Declare our catkin package.
+###################################
+## catkin specific configuration ##
+###################################
+
 catkin_package(
-   CATKIN_DEPENDS
-   geometry_msgs
-   std_msgs
-   std_srvs
-   dynamic_reconfigure
+    CATKIN_DEPENDS
+    geometry_msgs
+    std_msgs
+    std_srvs
+    dynamic_reconfigure
 )
 
-#########################################################
-# SOURCES
-file(GLOB_RECURSE ${PROJECT_NAME}_SRC *.cpp)
-# HEADERS
-file(GLOB_RECURSE ${PROJECT_NAME}_HDR *.h)
-#########################################################
+###########
+## Build ##
+###########
 
-#########################################################
-# LAUNCH FILES
-# Adding LAUNCH files to project source, without compiling them
-file(GLOB_RECURSE LAUNCH . *.launch)
-set_source_files_properties(${LAUNCH} PROPERTIES HEADER_FILE_ONLY TRUE)
-#########################################################
-
-#########################################################
-# EXECUTABLE
-add_executable( 
-    robot_wandering_node
-    ${${PROJECT_NAME}_SRC}
-    ${${PROJECT_NAME}_HDR}
-    ${LAUNCH}
-    ${CFG}
+include_directories(
+  ${catkin_INCLUDE_DIRS}
 )
 
-target_link_libraries(
-    robot_wandering_node
-    ${catkin_LIBRARIES}
-)
+# Declare a cpp executable
+add_executable(${PROJECT_NAME}_node src/robot_wandering_node.cpp)
+add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES})
 
 
