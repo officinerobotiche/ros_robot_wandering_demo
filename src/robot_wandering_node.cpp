@@ -30,6 +30,7 @@ void dynReconfCallback(ros_robot_wandering_demo::wandering_dyn_paramsConfig &con
 #endif
 
 // >>>>> Params
+std::string scan_string = "scan";       ///< Reference scan wandering
 std::string cmd_vel_string = "cmd_vel"; ///< Speed command to publish (Topic: geometry_msgs::Twist)
 std::string frame_link = "base_link";   ///< Referene frame for rviz visualization
 double repThresh = 1.5f;                ///< Over this distance the point become attractive
@@ -105,7 +106,7 @@ int main(int argc, char** argv)
 
     // >>>>> Subscribers
     ros::Subscriber scanSub;
-    scanSub = nh.subscribe<sensor_msgs::LaserScan>("zed_camera/scan",1,&processLaserScan);
+    scanSub = nh.subscribe<sensor_msgs::LaserScan>(scan_string,1,&processLaserScan);
     // <<<<< Subscribers
 
     ros::Publisher wrenchPub = nh.advertise<geometry_msgs::WrenchStamped>("nav_force", 10, false);
@@ -444,6 +445,16 @@ void dynReconfCallback(ros_robot_wandering_demo::wandering_dyn_paramsConfig &con
 
 void load_params(ros::NodeHandle& nh)
 {
+    if( nh.hasParam( "scan_string" ) )
+    {
+        nh.getParam( "scan_string", scan_string );
+    }
+    else
+    {
+        nh.setParam( "scan_string", scan_string );
+        ROS_INFO_STREAM( "scan_string" << " not present. Default value set: " << scan_string );
+    }
+
     if( nh.hasParam( "cmd_vel_string" ) )
     {
         nh.getParam( "cmd_vel_string", cmd_vel_string );

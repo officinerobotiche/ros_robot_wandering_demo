@@ -58,8 +58,8 @@ include_directories(
 )
 
 # Declare a cpp executable
-add_executable(${PROJECT_NAME}_node src/robot_wandering_node.cpp)
-add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES})
+add_executable(robot_wandering_node src/robot_wandering_node.cpp)
+add_dependencies(robot_wandering_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
+target_link_libraries(robot_wandering_node ${catkin_LIBRARIES})
 
 
