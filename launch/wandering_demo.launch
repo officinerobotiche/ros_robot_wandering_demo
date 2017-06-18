@@ -9,7 +9,7 @@
      <param name="cmd_vel_string" value="wandering/cmd_vel"/>
 
      <!-- Reference frame for rviz visualization (default: base_link)-->
-     <param name="frame_link" value="rgbd_camera_depth_frame"/>
+     <param name="frame_link" value="zed_depth_frame"/>
 
      <!-- Points nearest than this distance are really dangerous and repulsion force is doubled -->
      <param name="dangerThresh" value="0.6"/>
